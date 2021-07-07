@@ -96,10 +96,13 @@ func main() {
 			logrus.Fatal(errors.New("no API key provided in flags nor in env variables"))
 		}
 	}
+	logrus.Info("API key found")
 
+	logrus.Info("starting fetch routines")
 	go fetchAccountDetails(a.apiKey)
 	go fetchMonitors(a.apiKey)
 
+	logrus.Info("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(a.address+":"+a.port, nil)
 }
@@ -109,6 +112,7 @@ func fetchAccountDetails(apiKey string) {
 	for {
 		select {
 		case <-ticker.C:
+			logrus.Info("fetching account details")
 			data := url.Values{
 				"api_key": {apiKey},
 				"format":  {"json"},
@@ -146,6 +150,7 @@ func fetchMonitors(apiKey string) {
 	for {
 		select {
 		case <-ticker.C:
+			logrus.Info("fetching monitors")
 			data := url.Values{
 				"api_key": {apiKey},
 				"format":  {"json"},
