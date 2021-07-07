@@ -1,4 +1,4 @@
-# Uptime Robot Expoprter
+# Uptime Robot Exporter
 
 A Prometheus exporter for Uptime Robot metrics.
 
