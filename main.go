@@ -105,7 +105,7 @@ func main() {
 }
 
 func fetchAccountDetails(apiKey string) {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
