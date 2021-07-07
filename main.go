@@ -87,6 +87,11 @@ var (
 		Help: "Down monitors",
 	})
 
+	pausedMonitors = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "uptimerobot_paused_monitors",
+		Help: "Down monitors",
+	})
+
 	monitorsStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "uptimerobot_monitors_status",
 		Help: "The total number of processed events",
@@ -151,6 +156,7 @@ func fetchAccountDetails(apiKey string) {
 
 			upMonitors.Set(float64(account.Account.UpMonitors))
 			downMonitors.Set(float64(account.Account.DownMonitors))
+			pausedMonitors.Set(float64(account.Account.PausedMonitors))
 
 			accountDetails.WithLabelValues(account.Account.Firstname,
 				account.Account.Email,
