@@ -24,6 +24,8 @@ and then execute the binary at `./out/bin/uptimerobot-exporter`
 Usage of uptimerobot-exporter:
   -api-key string
         Uptime Robot API key
+  -inteval int
+        Uptime robot API scrape interval, in seconds (default 30)
   -ip string
         IP on which the Prometheus server will be binded (default "0.0.0.0")
   -p string

@@ -19,9 +19,10 @@ import (
 )
 
 type app struct {
-	apiKey  string
-	address string
-	port    string
+	apiKey         string
+	address        string
+	port           string
+	scrapeInterval int
 }
 
 type AccountDetails struct {
@@ -108,6 +109,7 @@ func main() {
 	flag.StringVar(&a.apiKey, "api-key", "", "Uptime Robot API key")
 	flag.StringVar(&a.address, "ip", "0.0.0.0", "IP on which the Prometheus server will be binded")
 	flag.StringVar(&a.port, "p", "9705", "Port that will be used by the Prometheus server")
+	flag.IntVar(&a.scrapeInterval, "inteval", 30, "Uptime robot API scrape interval, in seconds")
 	flag.Parse()
 
 	if a.apiKey == "" {
@@ -119,16 +121,16 @@ func main() {
 	logrus.Info("API key found")
 
 	logrus.Info("starting fetch routines")
-	go fetchAccountDetails(a.apiKey)
-	go fetchMonitors(a.apiKey)
+	go fetchAccountDetails(a.apiKey, a.scrapeInterval)
+	go fetchMonitors(a.apiKey, a.scrapeInterval)
 
 	logrus.Info("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(a.address+":"+a.port, nil)
 }
 
-func fetchAccountDetails(apiKey string) {
-	ticker := time.NewTicker(time.Minute)
+func fetchAccountDetails(apiKey string, interval int) {
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -170,8 +172,8 @@ func fetchAccountDetails(apiKey string) {
 	}
 }
 
-func fetchMonitors(apiKey string) {
-	ticker := time.NewTicker(15 * time.Second)
+func fetchMonitors(apiKey string, interval int) {
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
