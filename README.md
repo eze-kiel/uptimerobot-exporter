@@ -42,7 +42,7 @@ To use it with Docker, you can either:
 $ docker build . -t uptimerobot-exporter:latest
 ```
 
-* use the pre-built image.
+* use the pre-built image (`ez3kiel/uptimerobot-exporter`).
 
 In both cases, you have to provide the API key to run the container:
 
