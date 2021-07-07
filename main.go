@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -126,6 +127,10 @@ func main() {
 
 	logrus.Info("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "I'm alive! 8)")
+	})
 	http.ListenAndServe(a.address+":"+a.port, nil)
 }
 

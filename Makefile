@@ -2,7 +2,7 @@ GOCMD=go
 GOTEST=$(GOCMD) test
 GOVET=$(GOCMD) vet
 BINARY_NAME=uptimerobot-exporter
-VERSION?=0.0.0
+VERSION?=0.2.0
 DOCKER_REGISTRY?=ez3kiel
 
 GREEN  := $(shell tput -Txterm setaf 2)
