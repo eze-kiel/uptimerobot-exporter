@@ -63,6 +63,11 @@ type MonitorsData struct {
 		Interval       int    `json:"interval"`
 		Status         int    `json:"status"`
 		CreateDatetime int    `json:"create_datetime"`
+		ResponseTimes  []struct {
+			Datetime int `json:"datetime"`
+			Value    int `json:"value"`
+		} `json:"response_times"`
+		AverageResponseTime string `json:"average_response_time"`
 	} `json:"monitors"`
 }
 
@@ -72,15 +77,30 @@ var (
 		Help: "Details of the Uptime Robot account",
 	}, []string{"firstname", "email", "monitors_limit", "monitor_interval", "up_monitors", "down_monitors", "paused_monitors", "payment_period"})
 
+	upMonitors = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "uptimerobot_up_monitors",
+		Help: "Up monitors",
+	})
+
+	downMonitors = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "uptimerobot_down_monitors",
+		Help: "Down monitors",
+	})
+
+	pausedMonitors = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "uptimerobot_paused_monitors",
+		Help: "Down monitors",
+	})
+
 	monitorsStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "uptimerobot_monitors_status",
 		Help: "The total number of processed events",
 	}, []string{"url", "friendly_name", "interval"})
 
-	// responseTimes = promauto.NewGaugeVec(prometheus.GaugeOpts{
-	// 	Name: "uptimerobot_response_time",
-	// 	Help: "Response times of the monitors",
-	// }, []string{"url", "friendly_name", "type"})
+	responseTime = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "uptimerobot_response_time",
+		Help: "Monitors response times",
+	}, []string{"url", "friendly_name", "type"})
 )
 
 func main() {
@@ -96,19 +116,23 @@ func main() {
 			logrus.Fatal(errors.New("no API key provided in flags nor in env variables"))
 		}
 	}
+	logrus.Info("API key found")
 
+	logrus.Info("starting fetch routines")
 	go fetchAccountDetails(a.apiKey)
 	go fetchMonitors(a.apiKey)
 
+	logrus.Info("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.ListenAndServe(a.address+":"+a.port, nil)
 }
 
 func fetchAccountDetails(apiKey string) {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
+			logrus.Info("fetching account details")
 			data := url.Values{
 				"api_key": {apiKey},
 				"format":  {"json"},
@@ -129,6 +153,11 @@ func fetchAccountDetails(apiKey string) {
 			if err := json.Unmarshal(body, &account); err != nil {
 				logrus.Fatalf("cannot parse JSON: %s", err)
 			}
+
+			upMonitors.Set(float64(account.Account.UpMonitors))
+			downMonitors.Set(float64(account.Account.DownMonitors))
+			pausedMonitors.Set(float64(account.Account.PausedMonitors))
+
 			accountDetails.WithLabelValues(account.Account.Firstname,
 				account.Account.Email,
 				strconv.Itoa(account.Account.MonitorLimit),
@@ -142,13 +171,16 @@ func fetchAccountDetails(apiKey string) {
 }
 
 func fetchMonitors(apiKey string) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
+			logrus.Info("fetching monitors")
 			data := url.Values{
-				"api_key": {apiKey},
-				"format":  {"json"},
+				"api_key":              {apiKey},
+				"format":               {"json"},
+				"response_times":       {"1"},
+				"response_times_limit": {"1"},
 			}
 
 			resp, err := http.PostForm("https://api.uptimerobot.com/v2/getMonitors", data)
@@ -169,9 +201,7 @@ func fetchMonitors(apiKey string) {
 
 			for _, m := range monitors.Monitors {
 				monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
-				// if m.Status == 2 {
-				// 	responseTimes.WithLabelValues(m.URL, m.FriendlyName, m.Type).Set()
-				// }
+				responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
 			}
 		}
 	}
