@@ -52,6 +52,8 @@ $ docker run -e UPTIMEROBOT_API_KEY=$(echo UPTIMEROBOT_API_KEY) uptimerobot-expo
 
 ## Kubernetes
 
+You can find the associated Helm charts [here](https://github.com/devops-works/helm-charts/tree/master/uptimerobot). You need to change `uptimerobot.apiKey` in `values.yaml` to make it working, or overwrite it with Helmfile.
+
 ## License
 
 MIT
