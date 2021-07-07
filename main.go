@@ -132,79 +132,75 @@ func main() {
 func fetchAccountDetails(apiKey string, interval int) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	for {
-		select {
-		case <-ticker.C:
-			logrus.Info("fetching account details")
-			data := url.Values{
-				"api_key": {apiKey},
-				"format":  {"json"},
-			}
-
-			resp, err := http.PostForm("https://api.uptimerobot.com/v2/getAccountDetails", data)
-			if err != nil {
-				logrus.Error(err)
-			}
-
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				logrus.Fatalf("cannot parse response body: %s", err)
-			}
-			resp.Body.Close()
-
-			var account AccountDetails
-			if err := json.Unmarshal(body, &account); err != nil {
-				logrus.Fatalf("cannot parse JSON: %s", err)
-			}
-
-			upMonitors.Set(float64(account.Account.UpMonitors))
-			downMonitors.Set(float64(account.Account.DownMonitors))
-			pausedMonitors.Set(float64(account.Account.PausedMonitors))
-
-			accountDetails.WithLabelValues(account.Account.Firstname,
-				account.Account.Email,
-				strconv.Itoa(account.Account.MonitorLimit),
-				strconv.Itoa(account.Account.MonitorInterval),
-				strconv.Itoa(account.Account.UpMonitors),
-				strconv.Itoa(account.Account.DownMonitors),
-				strconv.Itoa(account.Account.PausedMonitors),
-				strconv.Itoa(account.Account.PaymentPeriod))
+		<-ticker.C
+		logrus.Info("fetching account details")
+		data := url.Values{
+			"api_key": {apiKey},
+			"format":  {"json"},
 		}
+
+		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getAccountDetails", data)
+		if err != nil {
+			logrus.Error(err)
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			logrus.Fatalf("cannot parse response body: %s", err)
+		}
+		resp.Body.Close()
+
+		var account AccountDetails
+		if err := json.Unmarshal(body, &account); err != nil {
+			logrus.Fatalf("cannot parse JSON: %s", err)
+		}
+
+		upMonitors.Set(float64(account.Account.UpMonitors))
+		downMonitors.Set(float64(account.Account.DownMonitors))
+		pausedMonitors.Set(float64(account.Account.PausedMonitors))
+
+		accountDetails.WithLabelValues(account.Account.Firstname,
+			account.Account.Email,
+			strconv.Itoa(account.Account.MonitorLimit),
+			strconv.Itoa(account.Account.MonitorInterval),
+			strconv.Itoa(account.Account.UpMonitors),
+			strconv.Itoa(account.Account.DownMonitors),
+			strconv.Itoa(account.Account.PausedMonitors),
+			strconv.Itoa(account.Account.PaymentPeriod))
 	}
 }
 
 func fetchMonitors(apiKey string, interval int) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	for {
-		select {
-		case <-ticker.C:
-			logrus.Info("fetching monitors")
-			data := url.Values{
-				"api_key":              {apiKey},
-				"format":               {"json"},
-				"response_times":       {"1"},
-				"response_times_limit": {"1"},
-			}
+		<-ticker.C
+		logrus.Info("fetching monitors")
+		data := url.Values{
+			"api_key":              {apiKey},
+			"format":               {"json"},
+			"response_times":       {"1"},
+			"response_times_limit": {"1"},
+		}
 
-			resp, err := http.PostForm("https://api.uptimerobot.com/v2/getMonitors", data)
-			if err != nil {
-				logrus.Error(err)
-			}
+		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getMonitors", data)
+		if err != nil {
+			logrus.Error(err)
+		}
 
-			body, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				logrus.Fatalf("cannot parse response body: %s", err)
-			}
-			resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			logrus.Fatalf("cannot parse response body: %s", err)
+		}
+		resp.Body.Close()
 
-			var monitors MonitorsData
-			if err := json.Unmarshal(body, &monitors); err != nil {
-				logrus.Fatalf("cannot parse JSON: %s", err)
-			}
+		var monitors MonitorsData
+		if err := json.Unmarshal(body, &monitors); err != nil {
+			logrus.Fatalf("cannot parse JSON: %s", err)
+		}
 
-			for _, m := range monitors.Monitors {
-				monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
-				responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
-			}
+		for _, m := range monitors.Monitors {
+			monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
+			responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
 		}
 	}
 }
