@@ -49,7 +49,7 @@ $ docker build . -t uptimerobot-exporter:latest
 In both cases, you have to provide the API key to run the container:
 
 ```
-$ docker run -e UPTIMEROBOT_API_KEY=$(echo UPTIMEROBOT_API_KEY) uptimerobot-exporter:latest
+$ docker run -e UPTIMEROBOT_API_KEY=$(echo $UPTIMEROBOT_API_KEY) uptimerobot-exporter:latest
 ```
 
 ## Kubernetes
