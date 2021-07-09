@@ -17,7 +17,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
-	"github.com/sirupsen/logrus"
 )
 
 type app struct {
@@ -112,11 +111,20 @@ func main() {
 	flag.StringVar(&a.apiKey, "api-key", "", "Uptime Robot API key")
 	flag.StringVar(&a.address, "ip", "0.0.0.0", "IP on which the Prometheus server will be binded")
 	flag.StringVar(&a.port, "p", "9705", "Port that will be used by the Prometheus server")
-	flag.StringVar(&a.logLevel, "log-level", "info", "Log Level. ")
+	flag.StringVar(&a.logLevel, "log-level", "info", "Log Level. Supported log levels are trace, debug, info, warn, error, fatal, panic")
 	flag.IntVar(&a.scrapeInterval, "inteval", 30, "Uptime robot API scrape interval, in seconds")
 	flag.Parse()
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
+	logLevel, err := zerolog.ParseLevel(a.logLevel)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Msg("invalid log level defined. Setting default to info level.")
+		a.logLevel = "info"
+	}
+	zerolog.SetGlobalLevel(logLevel)
 
 	if a.apiKey == "" {
 		a.apiKey = os.Getenv("UPTIMEROBOT_API_KEY")
@@ -128,7 +136,8 @@ func main() {
 	log.Info().
 		Msg("API key found")
 
-	logrus.Info("starting fetch routines")
+	log.Info().
+		Msg("starting fetch routines")
 	go fetchAccountDetails(a.apiKey, a.scrapeInterval)
 	go fetchMonitors(a.apiKey, a.scrapeInterval)
 
@@ -191,7 +200,8 @@ func fetchMonitors(apiKey string, interval int) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	for {
 		<-ticker.C
-		logrus.Info("fetching monitors")
+		log.Info().
+			Msg("fetching monitors")
 		data := url.Values{
 			"api_key":              {apiKey},
 			"format":               {"json"},
