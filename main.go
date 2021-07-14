@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -12,7 +11,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"flag"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -25,6 +27,7 @@ type app struct {
 	port           string
 	scrapeInterval int
 	logLevel       string
+	logger         zerolog.Logger
 }
 
 type AccountDetails struct {
@@ -124,24 +127,27 @@ func main() {
 			Msg("invalid log level defined. Setting default to info level.")
 		a.logLevel = "info"
 	}
-	zerolog.SetGlobalLevel(logLevel)
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	logger.WithLevel(logLevel)
+	a.logger = logger
 
 	if a.apiKey == "" {
 		a.apiKey = os.Getenv("UPTIMEROBOT_API_KEY")
 		if a.apiKey == "" {
 			log.Fatal().
-				Err(errors.New("no API key provided in flags nor in env variables"))
+				Err(errors.New("no API key provided in flags nor in env variables")).
+				Msg("no API key provided")
 		}
 	}
-	log.Info().
+	logger.Info().
 		Msg("API key found")
 
-	log.Info().
+	logger.Info().
 		Msg("starting fetch routines")
-	go fetchAccountDetails(a.apiKey, a.scrapeInterval)
-	go fetchMonitors(a.apiKey, a.scrapeInterval)
+	go a.fetchAccountDetails()
+	go a.fetchMonitors()
 
-	log.Info().
+	logger.Info().
 		Msg("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -151,34 +157,36 @@ func main() {
 	http.ListenAndServe(a.address+":"+a.port, nil)
 }
 
-func fetchAccountDetails(apiKey string, interval int) {
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func (a *app) fetchAccountDetails() {
+	ticker := time.NewTicker(time.Duration(a.scrapeInterval) * time.Second)
 	for {
 		<-ticker.C
-		log.Info().
-			Msg("fetching account details\"")
+		a.logger.Info().
+			Msg("fetching account details")
 		data := url.Values{
-			"api_key": {apiKey},
+			"api_key": {a.apiKey},
 			"format":  {"json"},
 		}
 
 		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getAccountDetails", data)
 		if err != nil {
-			log.Error().
+			a.logger.Error().
 				Err(err)
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Fatal().
-				Err(fmt.Errorf("cannot parse response body: %s", err))
+			a.logger.Fatal().
+				Err(fmt.Errorf("cannot parse response body: %s", err)).
+				Msg("response body parsing error")
 		}
 		resp.Body.Close()
 
 		var account AccountDetails
 		if err := json.Unmarshal(body, &account); err != nil {
-			log.Fatal().
-				Err(fmt.Errorf("cannot parse JSON: %s", err))
+			a.logger.Fatal().
+				Err(fmt.Errorf("cannot parse JSON: %s", err)).
+				Msg("JSON unmarshalling error")
 		}
 
 		upMonitors.Set(float64(account.Account.UpMonitors))
@@ -196,14 +204,14 @@ func fetchAccountDetails(apiKey string, interval int) {
 	}
 }
 
-func fetchMonitors(apiKey string, interval int) {
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func (a *app) fetchMonitors() {
+	ticker := time.NewTicker(time.Duration(a.scrapeInterval) * time.Second)
 	for {
 		<-ticker.C
-		log.Info().
+		a.logger.Info().
 			Msg("fetching monitors")
 		data := url.Values{
-			"api_key":              {apiKey},
+			"api_key":              {a.apiKey},
 			"format":               {"json"},
 			"response_times":       {"1"},
 			"response_times_limit": {"1"},
@@ -211,21 +219,23 @@ func fetchMonitors(apiKey string, interval int) {
 
 		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getMonitors", data)
 		if err != nil {
-			log.Error().
+			a.logger.Error().
 				Err(err)
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.Fatal().
-				Err(fmt.Errorf("cannot parse response body: %s", err))
+			a.logger.Fatal().
+				Err(fmt.Errorf("cannot parse response body: %s", err)).
+				Msg("response body parsing error")
 		}
 		resp.Body.Close()
 
 		var monitors MonitorsData
 		if err := json.Unmarshal(body, &monitors); err != nil {
-			log.Fatal().
-				Err(fmt.Errorf("cannot parse JSON: %s", err))
+			a.logger.Fatal().
+				Err(fmt.Errorf("cannot parse JSON: %s", err)).
+				Msg("JSON unmarshalling error")
 		}
 
 		for _, m := range monitors.Monitors {
