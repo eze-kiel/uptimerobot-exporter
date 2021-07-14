@@ -118,8 +118,6 @@ func main() {
 	flag.IntVar(&a.scrapeInterval, "inteval", 30, "Uptime robot API scrape interval, in seconds")
 	flag.Parse()
 
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-
 	logLevel, err := zerolog.ParseLevel(a.logLevel)
 	if err != nil {
 		log.Error().
