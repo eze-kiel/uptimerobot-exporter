@@ -118,15 +118,18 @@ func main() {
 	flag.IntVar(&a.scrapeInterval, "inteval", 30, "Uptime robot API scrape interval, in seconds")
 	flag.Parse()
 
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
 	logLevel, err := zerolog.ParseLevel(a.logLevel)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Msg("invalid log level defined. Setting default to info level.")
-		a.logLevel = "info"
+		logger.WithLevel(zerolog.InfoLevel)
+	} else {
+		logger.WithLevel(logLevel)
 	}
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	logger.WithLevel(logLevel)
+
 	a.logger = logger
 
 	if a.apiKey == "" {
