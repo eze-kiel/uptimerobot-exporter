@@ -153,19 +153,23 @@ func (a app) fetchAccountDetails() {
 		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getAccountDetails", data)
 		if err != nil {
 			a.logger.Error().Err(err).Msg("failed to fetch account details")
+			continue
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			a.logger.Fatal().Err(err).Msg("cannot parse response body")
-		}
 		resp.Body.Close()
+		if err != nil {
+			a.logger.Error().Err(err).Msg("cannot parse response body")
+			continue
+		}
 
 		var account AccountDetails
 		if err := json.Unmarshal(body, &account); err != nil {
-			a.logger.Fatal().Err(err).Msg("cannot parse JSON")
+			a.logger.Error().Err(err).Msg("cannot parse JSON")
+			continue
 		}
 
+		a.logger.Debug().Msg("updating account details metrics")
 		upMonitors.Set(float64(account.Account.UpMonitors))
 		downMonitors.Set(float64(account.Account.DownMonitors))
 		pausedMonitors.Set(float64(account.Account.PausedMonitors))
@@ -196,20 +200,24 @@ func (a app) fetchMonitors() {
 		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getMonitors", data)
 		if err != nil {
 			a.logger.Error().Err(err).Msg("failed to fetch monitors")
+			continue
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			a.logger.Fatal().Err(err).Msg("cannot parse response body")
-		}
 		resp.Body.Close()
+		if err != nil {
+			a.logger.Error().Err(err).Msg("cannot parse response body")
+			continue
+		}
 
 		var monitors MonitorsData
 		if err := json.Unmarshal(body, &monitors); err != nil {
-			a.logger.Fatal().Err(err).Msg("cannot parse JSON")
+			a.logger.Error().Err(err).Msg("cannot parse JSON")
+			continue
 		}
 
 		for _, m := range monitors.Monitors {
+			a.logger.Debug().Msg("updating monitors metrics")
 			monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
 			responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
 		}
