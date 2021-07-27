@@ -18,7 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
-	"github.com/sirupsen/logrus"
 )
 
 type app struct {
@@ -189,7 +188,7 @@ func (a app) fetchMonitors() {
 	ticker := time.NewTicker(time.Duration(a.scrapeInterval) * time.Second)
 	for {
 		<-ticker.C
-		logrus.Info("fetching monitors")
+		a.logger.Info().Msg("fetching monitors")
 		data := url.Values{
 			"api_key":              {a.apiKey},
 			"format":               {"json"},
