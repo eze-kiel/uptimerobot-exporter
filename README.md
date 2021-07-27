@@ -23,13 +23,15 @@ and then execute the binary at `./out/bin/uptimerobot-exporter`
 ```
 Usage of uptimerobot-exporter:
   -api-key string
-        Uptime Robot API key
+    	Uptime Robot API key
   -inteval int
-        Uptime robot API scrape interval, in seconds (default 30)
+    	Uptime robot API scrape interval, in seconds (default 30)
   -ip string
-        IP on which the Prometheus server will be binded (default "0.0.0.0")
+    	IP on which the Prometheus server will be binded (default "0.0.0.0")
+  -log-level string
+    	Log level (default "info")
   -p string
-        Port that will be used by the Prometheus server (default "9705")
+    	Port that will be used by the Prometheus server (default "9705")
 ```
 
 Basically, you just have to pass your Uptime Robot API key. Of course, to avoid typing it in the terminal, you can provide it via an environment variable called `UPTIMEROBOT_API_KEY`.

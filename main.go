@@ -13,9 +13,11 @@ import (
 
 	"flag"
 
+	"github.com/eze-kiel/uptimerobot-exporter/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,6 +26,8 @@ type app struct {
 	address        string
 	port           string
 	scrapeInterval int
+	logLevel       string
+	logger         zerolog.Logger
 }
 
 type AccountDetails struct {
@@ -111,21 +115,23 @@ func main() {
 	flag.StringVar(&a.address, "ip", "0.0.0.0", "IP on which the Prometheus server will be binded")
 	flag.StringVar(&a.port, "p", "9705", "Port that will be used by the Prometheus server")
 	flag.IntVar(&a.scrapeInterval, "inteval", 30, "Uptime robot API scrape interval, in seconds")
+	flag.StringVar(&a.logLevel, "log-level", "info", "Log level")
 	flag.Parse()
 
+	a.logger = logger.New(a.logLevel)
 	if a.apiKey == "" {
 		a.apiKey = os.Getenv("UPTIMEROBOT_API_KEY")
 		if a.apiKey == "" {
-			logrus.Fatal(errors.New("no API key provided in flags nor in env variables"))
+			a.logger.Fatal().Err(errors.New("missing Uptime Robot API key")).Msg("use -api-key or UPTIMEROBOT_API_KEY env variable")
 		}
 	}
-	logrus.Info("API key found")
+	a.logger.Info().Msg("API key found")
+	a.logger.Info().Msg("starting fetch routines")
 
-	logrus.Info("starting fetch routines")
-	go fetchAccountDetails(a.apiKey, a.scrapeInterval)
-	go fetchMonitors(a.apiKey, a.scrapeInterval)
+	go a.fetchAccountDetails()
+	go a.fetchMonitors()
 
-	logrus.Info("starting metrics server")
+	a.logger.Info().Msg("starting metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -134,32 +140,36 @@ func main() {
 	http.ListenAndServe(a.address+":"+a.port, nil)
 }
 
-func fetchAccountDetails(apiKey string, interval int) {
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func (a app) fetchAccountDetails() {
+	ticker := time.NewTicker(time.Duration(a.scrapeInterval) * time.Second)
 	for {
 		<-ticker.C
-		logrus.Info("fetching account details")
+		a.logger.Info().Msg("fetching account details")
 		data := url.Values{
-			"api_key": {apiKey},
+			"api_key": {a.apiKey},
 			"format":  {"json"},
 		}
 
 		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getAccountDetails", data)
 		if err != nil {
-			logrus.Error(err)
+			a.logger.Error().Err(err).Msg("failed to fetch account details")
+			continue
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			logrus.Fatalf("cannot parse response body: %s", err)
-		}
 		resp.Body.Close()
+		if err != nil {
+			a.logger.Error().Err(err).Msg("cannot parse response body")
+			continue
+		}
 
 		var account AccountDetails
 		if err := json.Unmarshal(body, &account); err != nil {
-			logrus.Fatalf("cannot parse JSON: %s", err)
+			a.logger.Error().Err(err).Msg("cannot parse JSON")
+			continue
 		}
 
+		a.logger.Debug().Msg("updating account details metrics")
 		upMonitors.Set(float64(account.Account.UpMonitors))
 		downMonitors.Set(float64(account.Account.DownMonitors))
 		pausedMonitors.Set(float64(account.Account.PausedMonitors))
@@ -175,13 +185,13 @@ func fetchAccountDetails(apiKey string, interval int) {
 	}
 }
 
-func fetchMonitors(apiKey string, interval int) {
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func (a app) fetchMonitors() {
+	ticker := time.NewTicker(time.Duration(a.scrapeInterval) * time.Second)
 	for {
 		<-ticker.C
 		logrus.Info("fetching monitors")
 		data := url.Values{
-			"api_key":              {apiKey},
+			"api_key":              {a.apiKey},
 			"format":               {"json"},
 			"response_times":       {"1"},
 			"response_times_limit": {"1"},
@@ -189,21 +199,25 @@ func fetchMonitors(apiKey string, interval int) {
 
 		resp, err := http.PostForm("https://api.uptimerobot.com/v2/getMonitors", data)
 		if err != nil {
-			logrus.Error(err)
+			a.logger.Error().Err(err).Msg("failed to fetch monitors")
+			continue
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			logrus.Fatalf("cannot parse response body: %s", err)
-		}
 		resp.Body.Close()
+		if err != nil {
+			a.logger.Error().Err(err).Msg("cannot parse response body")
+			continue
+		}
 
 		var monitors MonitorsData
 		if err := json.Unmarshal(body, &monitors); err != nil {
-			logrus.Fatalf("cannot parse JSON: %s", err)
+			a.logger.Error().Err(err).Msg("cannot parse JSON")
+			continue
 		}
 
 		for _, m := range monitors.Monitors {
+			a.logger.Debug().Msg("updating monitors metrics")
 			monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
 			responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
 		}
