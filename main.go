@@ -72,7 +72,7 @@ type MonitorsData struct {
 			Datetime int `json:"datetime"`
 			Value    int `json:"value"`
 		} `json:"response_times"`
-		AverageResponseTime string `json:"average_response_time"`
+		AverageResponseTime json.Number `json:"average_response_time"`
 	} `json:"monitors"`
 }
 
@@ -113,7 +113,7 @@ func main() {
 	flag.StringVar(&a.apiKey, "api-key", "", "Uptime Robot API key")
 	flag.StringVar(&a.address, "ip", "0.0.0.0", "IP on which the Prometheus server will be binded")
 	flag.StringVar(&a.port, "p", "9705", "Port that will be used by the Prometheus server")
-	flag.IntVar(&a.scrapeInterval, "inteval", 30, "Uptime robot API scrape interval, in seconds")
+	flag.IntVar(&a.scrapeInterval, "interval", 30, "Uptime robot API scrape interval, in seconds")
 	flag.StringVar(&a.logLevel, "log-level", "info", "Log level")
 	flag.Parse()
 
@@ -216,9 +216,11 @@ func (a app) fetchMonitors() {
 		}
 
 		for _, m := range monitors.Monitors {
-			a.logger.Debug().Msg("updating monitors metrics")
+			a.logger.Debug().Msgf("updating monitors metrics for %s: %f (rtt count %d)", m.FriendlyName, float64(m.Status), len(m.ResponseTimes))
 			monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
-			responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
+			if len(m.ResponseTimes) > 0 {
+				responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
+			}
 		}
 	}
 }
