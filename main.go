@@ -54,26 +54,28 @@ type MonitorsData struct {
 		Limit  int `json:"limit"`
 		Total  int `json:"total"`
 	} `json:"pagination"`
-	Monitors []struct {
-		ID             int    `json:"id"`
-		FriendlyName   string `json:"friendly_name"`
-		URL            string `json:"url"`
-		Type           int    `json:"type"`
-		SubType        string `json:"sub_type"`
-		KeywordType    int    `json:"keyword_type"`
-		KeywordValue   string `json:"keyword_value"`
-		HTTPUsername   string `json:"http_username"`
-		HTTPPassword   string `json:"http_password"`
-		Port           string `json:"port"`
-		Interval       int    `json:"interval"`
-		Status         int    `json:"status"`
-		CreateDatetime int    `json:"create_datetime"`
-		ResponseTimes  []struct {
-			Datetime int `json:"datetime"`
-			Value    int `json:"value"`
-		} `json:"response_times"`
-		AverageResponseTime json.Number `json:"average_response_time"`
-	} `json:"monitors"`
+	Monitors []Monitor `json:"monitors"`
+}
+
+type Monitor struct {
+	ID             int    `json:"id"`
+	FriendlyName   string `json:"friendly_name"`
+	URL            string `json:"url"`
+	Type           int    `json:"type"`
+	SubType        string `json:"sub_type"`
+	KeywordType    int    `json:"keyword_type"`
+	KeywordValue   string `json:"keyword_value"`
+	HTTPUsername   string `json:"http_username"`
+	HTTPPassword   string `json:"http_password"`
+	Port           string `json:"port"`
+	Interval       int    `json:"interval"`
+	Status         int    `json:"status"`
+	CreateDatetime int    `json:"create_datetime"`
+	ResponseTimes  []struct {
+		Datetime int `json:"datetime"`
+		Value    int `json:"value"`
+	} `json:"response_times"`
+	AverageResponseTime json.Number `json:"average_response_time"`
 }
 
 var (
@@ -136,7 +138,10 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "I'm alive! 8)")
 	})
-	http.ListenAndServe(a.address+":"+a.port, nil)
+
+	if err := http.ListenAndServe(a.address+":"+a.port, nil); err != nil {
+		a.logger.Fatal().Err(err).Msg("Metrics server failed")
+	}
 }
 
 func (a app) fetchAccountDetails() {
@@ -186,6 +191,7 @@ func (a app) fetchAccountDetails() {
 
 func (a app) fetchMonitors() {
 	ticker := time.NewTicker(time.Duration(a.scrapeInterval) * time.Second)
+	var previousMonitors MonitorsData
 	for {
 		<-ticker.C
 		a.logger.Info().Msg("fetching monitors")
@@ -209,18 +215,50 @@ func (a app) fetchMonitors() {
 			continue
 		}
 
-		var monitors MonitorsData
-		if err := json.Unmarshal(body, &monitors); err != nil {
+		var activeMonitors MonitorsData
+		if err := json.Unmarshal(body, &activeMonitors); err != nil {
 			a.logger.Error().Err(err).Msg("cannot parse JSON")
 			continue
 		}
 
-		for _, m := range monitors.Monitors {
+		// compare currently active monitors to the one seen at the previous
+		// loop
+		for _, old := range previousMonitors.Monitors {
+			if !isMonitorStillActive(old, activeMonitors) {
+				// monitor 'old' not active anymore, let's try to remove its metrics
+				if monitorsStatus.DeleteLabelValues(old.URL, old.FriendlyName, strconv.Itoa(old.Interval)) {
+					a.logger.Debug().Msgf("monitor %s does not exist anymore, and its monitor_status metric has been deleted", old.FriendlyName)
+				} else {
+					a.logger.Warn().Msgf("monitor %s does not exist anymore, but its monitor_status could not have been deleted", old.FriendlyName)
+				}
+
+				if responseTime.DeleteLabelValues(old.URL, old.FriendlyName, strconv.Itoa(old.Type)) {
+					a.logger.Debug().Msgf("monitor %s does not exist anymore, and its response_time metric has been deleted", old.FriendlyName)
+				} else {
+					a.logger.Warn().Msgf("monitor %s does not exist anymore, but its response_time could not have been deleted", old.FriendlyName)
+				}
+			}
+		}
+
+		// update the metrics of the currently active monitors
+		for _, m := range activeMonitors.Monitors {
 			a.logger.Debug().Msgf("updating monitors metrics for %s: %f (rtt count %d)", m.FriendlyName, float64(m.Status), len(m.ResponseTimes))
 			monitorsStatus.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Interval)).Set(float64(m.Status))
 			if len(m.ResponseTimes) > 0 {
 				responseTime.WithLabelValues(m.URL, m.FriendlyName, strconv.Itoa(m.Type)).Set(float64(m.ResponseTimes[0].Value))
 			}
+
+			// save the currently active monitors
+			previousMonitors = activeMonitors
 		}
 	}
+}
+
+func isMonitorStillActive(monitor Monitor, active MonitorsData) bool {
+	for _, active := range active.Monitors {
+		if active.FriendlyName == monitor.FriendlyName {
+			return true
+		}
+	}
+	return false
 }
